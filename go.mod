@@ -1,3 +1,3 @@
 module github.com/HuXin0817/colog
 
-go 1.22
+go 1.18

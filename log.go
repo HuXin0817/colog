@@ -101,16 +101,22 @@ func put(msgType int, msg any) {
 func Error(msg any) { put(errMsg, msg) }
 
 // Errorf logs a formatted error message.
-func Errorf(format string, args ...any) { Error(fmt.Sprintf(format, args...)) }
+func Errorf(format string, args ...any) {
+	Error(fmt.Sprintf(format, args...))
+}
 
 // Info logs an info message.
 func Info(msg any) { put(infoMsg, msg) }
 
 // Infof logs a formatted info message.
-func Infof(format string, args ...any) { Info(fmt.Sprintf(format, args...)) }
+func Infof(format string, args ...any) {
+	Info(fmt.Sprintf(format, args...))
+}
 
 // Warn logs a warning message.
 func Warn(msg any) { put(warnMsg, msg) }
 
 // Warnf logs a formatted warning message.
-func Warnf(format string, args ...any) { Warn(fmt.Sprintf(format, args...)) }
+func Warnf(format string, args ...any) {
+	Warn(fmt.Sprintf(format, args...))
+}
