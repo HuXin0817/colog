@@ -5,7 +5,7 @@ package colog
 import (
 	"fmt"
 	"os"
-	"path/filepath"
+	"path"
 	"runtime"
 	"sync"
 	"time"
@@ -28,50 +28,23 @@ var (
 		infoMsg: "\033[32m[INFO]\033[0m",  // Green for info messages
 		warnMsg: "\033[31m[WARN]\033[0m",  // Red for warning messages
 	}
-	record bool             // Indicates if logging to files is enabled
-	files  map[int]*os.File // Map of file handles for different log levels
-	locks  []*sync.Mutex    // Mutex locks for concurrent-safe file writing
+	logFile *os.File
+	mu      sync.Mutex
 )
 
-// Open initializes log files in the specified directory.
-// It creates separate files for error, info, and warning messages.
-func Open(dirPath string) (err error) {
-	if record {
-		return nil // Already initialized
-	}
-
-	files = make(map[int]*os.File)
-	locks = []*sync.Mutex{
-		errMsg:  {},
-		infoMsg: {},
-		warnMsg: {},
-	}
-
-	// Create the directory if it doesn't exist
-	if err = os.MkdirAll(dirPath, os.ModePerm); err != nil {
+// OpenLog initializes the log file.
+func OpenLog(filePath string) (err error) {
+	if err = os.MkdirAll(path.Dir(filePath), os.ModePerm); err != nil {
 		return err
 	}
-
-	// Log file names for different log levels
-	logFileName := []string{
-		errMsg:  "error.log",
-		infoMsg: "info.log",
-		warnMsg: "warn.log",
+	if logFile, err = os.OpenFile(filePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err != nil {
+		return err
 	}
-
-	// Open log files for appending
-	for i, file := range logFileName {
-		if files[i], err = os.OpenFile(filepath.Join(dirPath, file), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err != nil {
-			return err
-		}
-	}
-
-	record = true // Mark logging to files as enabled
 	return nil
 }
 
 // put writes a log message to the console and to the appropriate log file.
-func put(msgType int, msg any) {
+func put(msgType int, msg string) {
 	defer func() {
 		if r := recover(); r != nil {
 			fmt.Printf("\033[31m%v\033[0m\n", r) // Print panic message in red
@@ -81,24 +54,34 @@ func put(msgType int, msg any) {
 	// Get the caller's file and line number
 	_, file, line, _ := runtime.Caller(3)
 	t := time.Now()
+	logMessage := fmt.Sprintf("%s %v\n", t.Format(timeFormat), msg)
 
-	// Print log message to the console with color formatting
+	// Print the log message to the console with color formatting
 	fmt.Printf("%s \033[35m%s\033[0m \033[34m\033[4m%s\033[0m line %d\033[0m: \"%v\"\n",
 		head[msgType], t.Format(timeFormat), file, line, msg)
 
-	// Write log message to the file if recording is enabled
-	if record {
-		locks[msgType].Lock() // Acquire lock for the log level
-		mess := fmt.Sprintf("%s %s line %d: %v\n", t.Format(timeFormat), file, line, msg)
-		if _, err := files[msgType].WriteString(mess); err != nil {
-			fmt.Printf("\033[31m%v\033[0m\n", err) // Print error message in red
+	// Write the log message to the log file
+	if logFile != nil {
+		mu.Lock()
+		defer mu.Unlock()
+		_, err := logFile.WriteString(logMessage)
+		if err != nil {
+			fmt.Printf("\033[31mFailed to write log to file: %v\033[0m\n", err)
 		}
-		locks[msgType].Unlock() // Release lock for the log level
 	}
 }
 
 // Error logs an error message.
-func Error(msg any) { put(errMsg, msg) }
+func Error(msg ...any) {
+	msgstr := ""
+	for i, m := range msg {
+		msgstr += fmt.Sprint(m)
+		if i != len(msg)-1 {
+			msgstr += " "
+		}
+	}
+	put(errMsg, msgstr)
+}
 
 // Errorf logs a formatted error message.
 func Errorf(format string, args ...any) {
@@ -106,7 +89,16 @@ func Errorf(format string, args ...any) {
 }
 
 // Info logs an info message.
-func Info(msg any) { put(infoMsg, msg) }
+func Info(msg ...any) {
+	msgstr := ""
+	for i, m := range msg {
+		msgstr += fmt.Sprint(m)
+		if i != len(msg)-1 {
+			msgstr += " "
+		}
+	}
+	put(infoMsg, msgstr)
+}
 
 // Infof logs a formatted info message.
 func Infof(format string, args ...any) {
@@ -114,7 +106,16 @@ func Infof(format string, args ...any) {
 }
 
 // Warn logs a warning message.
-func Warn(msg any) { put(warnMsg, msg) }
+func Warn(msg ...any) {
+	msgstr := ""
+	for i, m := range msg {
+		msgstr += fmt.Sprint(m)
+		if i != len(msg)-1 {
+			msgstr += " "
+		}
+	}
+	put(warnMsg, msgstr)
+}
 
 // Warnf logs a formatted warning message.
 func Warnf(format string, args ...any) {
